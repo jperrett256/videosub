@@ -5,7 +5,21 @@
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
-	// TODO
+	switch (message)
+	{
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO min_max_info = (LPMINMAXINFO) l_param;
+			min_max_info->ptMinTrackSize.x = 400;
+			min_max_info->ptMinTrackSize.y = 250;
+		} break;
+
+		// default:
+		// {
+
+		// } break;
+	}
+
 	return DefWindowProc(window, message, w_param, l_param);
 }
 
@@ -22,9 +36,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 	{
 		.lpfnWndProc = main_window_proc,
 		.hInstance = instance,
-		// NOTE COLOR_BTNFACE is supposedly not supported on Windows 10 and up (see GetSysColor MSDN API reference), but empirically it works fine
-		.hbrBackground = (HBRUSH) GetSysColorBrush(COLOR_BTNFACE),
-		// .hbrBackground = (HBRUSH) (COLOR_BTNFACE + 1), // TODO use this simpler solution (also API reference doesn't say "not supported")
+		.hbrBackground = (HBRUSH) (COLOR_BTNFACE + 1),
 		.lpszClassName = L"MainWinClass"
 	};
 
@@ -34,7 +46,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 		0, main_wc.lpszClassName,
 		L"VideoSub",
 		WS_OVERLAPPEDWINDOW,
-		// TODO set minimum dimensions (approx 400x250)
 		CW_USEDEFAULT, CW_USEDEFAULT, 400, 400,
 		NULL, NULL, instance, NULL
 	);
@@ -57,17 +68,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 
 	EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
 
-	// // recommended method, but I don't like the font
-	// NONCLIENTMETRICS metrics =
-	// {
-	// 	.cbSize = sizeof(NONCLIENTMETRICS)
-	// };
-	// SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
-	// EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&metrics.lfCaptionFont));
 
 	ShowWindow(main_window, show_code);
+	SetFocus(hash_search_button); // set focus on first child (TODO will need updating when layout is updated)
+	// TODO do all applications really have to explicitly set focus on the first element for things to behave correctly?
 
-	// TODO tab through controls? Why doesn't TABSTOP solve everything?
 	// TODO handle button presses
 
 	/* TODO could be worth trying modeless dialog boxes (CreateDialog/CreateDialogIndirect)
@@ -83,6 +88,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 	MSG message;
 	while (GetMessage(&message, main_window, 0, 0) > 0)
 	{
+		if (IsDialogMessage(main_window, &message)) continue;
+
 		TranslateMessage(&message);
 		DispatchMessage(&message);
 	}
