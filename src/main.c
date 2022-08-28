@@ -3,6 +3,13 @@
 #include <assert.h>
 #include <windows.h>
 
+#define STB_SPRINTF_IMPLEMENTATION
+#include "stb_sprintf.h"
+#include "common.h"
+
+#define ID_BTN_HASH_SEARCH 1
+#define ID_BTN_NAME_SEARCH 2
+
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
 	switch (message)
@@ -12,6 +19,22 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
 			LPMINMAXINFO min_max_info = (LPMINMAXINFO) l_param;
 			min_max_info->ptMinTrackSize.x = 400;
 			min_max_info->ptMinTrackSize.y = 250;
+		} break;
+
+		case WM_COMMAND:
+		{
+			WORD button_identifier = LOWORD(w_param);
+			WORD notification_code = HIWORD(w_param);
+
+			assert((HWND)l_param != NULL);
+
+			if (notification_code == BN_CLICKED)
+			{
+				// DEBUG
+				char buf[1024];
+				stbsp_snprintf(buf, sizeof(buf), "button_identifier: %hu, notification_code: %hu\n", button_identifier, notification_code);
+				OutputDebugStringA(buf);
+			}
 		} break;
 
 		// default:
@@ -36,6 +59,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 	{
 		.lpfnWndProc = main_window_proc,
 		.hInstance = instance,
+		.hCursor = LoadCursor(NULL, IDC_ARROW),
 		.hbrBackground = (HBRUSH) (COLOR_BTNFACE + 1),
 		.lpszClassName = L"MainWinClass"
 	};
@@ -54,16 +78,20 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 		L"BUTTON",
 		L"Search by hash",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-		10, 10, 100, 20, // TODO x y width height
-		main_window, NULL, instance, NULL
+		10, 10, 84, 22,
+		main_window,
+		(HMENU) ID_BTN_HASH_SEARCH,
+		instance, NULL
 	);
 
 	HWND name_search_button = CreateWindow(
 		L"BUTTON",
 		L"Search by name",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-		10, 40, 100, 20, // TODO x y width height
-		main_window, NULL, instance, NULL
+		10, 40, 84, 22,
+		main_window,
+		(HMENU) ID_BTN_NAME_SEARCH,
+		instance, NULL
 	);
 
 	EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
