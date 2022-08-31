@@ -7,8 +7,101 @@
 #include "stb_sprintf.h"
 #include "common.h"
 
-#define ID_BTN_HASH_SEARCH 1
-#define ID_BTN_NAME_SEARCH 2
+#define WINDOW_MIN_WIDTH    420
+#define WINDOW_MIN_HEIGHT   300
+
+
+enum control_id_t {
+    ID_BTN_HASH_SEARCH,
+    ID_BTN_NAME_SEARCH,
+    ID_BTN_HELP,
+    ID_BTN_CONFIG,
+    ID_BTN_LOAD,
+    ID_BTN_SAVE_AS,
+    ID_STATIC_SUB_LANG,
+    ID_STATIC_TITLE,
+    ID_STATIC_SEASON,
+    ID_STATIC_EPISODE,
+    ID_EDIT_TITLE,
+    ID_EDIT_SEASON,
+    ID_EDIT_EPISODE,
+    ID_COMBO_SUB_LANG,
+    ID_LIST_BOX_SUBS
+};
+
+typedef struct win_controls_t win_controls_t;
+struct win_controls_t
+{
+    HWND button_hash_search;
+    HWND button_name_search;
+    HWND button_help;
+    HWND button_config;
+    HWND button_load;
+    HWND button_save_as;
+
+    HWND static_sub_lang;
+    HWND static_title;
+    HWND static_season;
+    HWND static_episode;
+
+    HWND edit_title;
+    HWND edit_season;
+    HWND edit_episode;
+
+    HWND combo_sub_lang;
+
+    HWND list_box_subs; // TODO create listbox
+};
+
+global_variable win_controls_t win_controls = {0};
+
+void set_win_layout(win_controls_t * win_controls, int client_width, int client_height)
+{
+    #define MARGIN_SIZE     10
+    #define COLUMN_GAP      5
+    #define ROW_GAP         5
+    #define ROW_HEIGHT      22 // height of most controls
+    #define NUM_COLUMNS     4
+
+    int current_x, current_y;
+    int column_width = (client_width - 2 * MARGIN_SIZE - (NUM_COLUMNS - 1) * COLUMN_GAP) / NUM_COLUMNS;
+
+    current_x = MARGIN_SIZE;
+    current_y = MARGIN_SIZE;
+
+    SetWindowPos(win_controls->static_sub_lang, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->combo_sub_lang, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width * 2 + COLUMN_GAP * 2;
+    SetWindowPos(win_controls->button_hash_search, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+
+    current_x = MARGIN_SIZE;
+    current_y += ROW_HEIGHT + ROW_GAP;
+
+    SetWindowPos(win_controls->static_title, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->edit_title, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width * 2 + COLUMN_GAP * 2;
+    SetWindowPos(win_controls->button_name_search, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+
+    current_x = MARGIN_SIZE;
+    current_y += ROW_HEIGHT + ROW_GAP;
+
+    SetWindowPos(win_controls->static_season, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->edit_season, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+
+    current_x = MARGIN_SIZE;
+    current_y += ROW_HEIGHT + ROW_GAP;
+
+    SetWindowPos(win_controls->static_episode, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->edit_episode, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+
+    // SetWindowPos(win_controls->list_box_subs)
+
+    // TODO
+}
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -17,8 +110,19 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
         case WM_GETMINMAXINFO:
         {
             LPMINMAXINFO min_max_info = (LPMINMAXINFO) l_param;
-            min_max_info->ptMinTrackSize.x = 400;
-            min_max_info->ptMinTrackSize.y = 250;
+            min_max_info->ptMinTrackSize.x = WINDOW_MIN_WIDTH;
+            min_max_info->ptMinTrackSize.y = WINDOW_MIN_HEIGHT;
+
+            return 0;
+        } break;
+
+        case WM_SIZE:
+        {
+            if (w_param == SIZE_RESTORED || w_param == SIZE_MAXIMIZED)
+            {
+                set_win_layout(&win_controls, LOWORD(l_param), HIWORD(l_param));
+                return 0;
+            }
         } break;
 
         case WM_COMMAND:
@@ -57,6 +161,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 {
     WNDCLASS main_wc =
     {
+        .style = CS_HREDRAW | CS_VREDRAW,
         .lpfnWndProc = main_window_proc,
         .hInstance = instance,
         .hCursor = LoadCursor(NULL, IDC_ARROW),
@@ -70,39 +175,86 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
         0, main_wc.lpszClassName,
         L"VideoSub",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 400, 400,
+        CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_MIN_WIDTH, WINDOW_MIN_WIDTH,
         NULL, NULL, instance, NULL
     );
 
     // TODO define layout in more systematic fashion (e.g. margin_width, control_padding, control_height)
-    // TODO is there a way of finding out how much width some text of a certain font takes up? (alternative to setting hard minimum window width)
+    /* TODO is there a way of finding out how much width some text of a certain font takes up? (alternative to setting hard minimum window width)
+     * (Maybe: DrawTextEx with DT_CALCRECT) */
 
-    HWND hash_search_button = CreateWindow(
+    win_controls.static_sub_lang = CreateWindow(
+        L"STATIC",
+        L"Subtitles language:",
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP, // TODO maybe SS_ENDELLIPSIS instead of just SS_LEFTNOWORDWRAP?
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_STATIC_SUB_LANG,
+        instance, NULL
+    );
+
+    win_controls.combo_sub_lang = CreateWindow(
+        L"COMBOBOX",
+        L"TODO", // TODO
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_COMBO_SUB_LANG,
+        instance, NULL
+    );
+
+    win_controls.button_hash_search = CreateWindow(
         L"BUTTON",
         L"Search by hash",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-        10, 10, 84, 22,
+        0, 0, 0, 0,
         main_window,
         (HMENU) ID_BTN_HASH_SEARCH,
         instance, NULL
     );
 
-    HWND name_search_button = CreateWindow(
+    win_controls.static_title = CreateWindow(
+        L"STATIC",
+        L"Title:",
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP, // TODO maybe SS_ENDELLIPSIS instead of just SS_LEFTNOWORDWRAP?
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_STATIC_TITLE,
+        instance, NULL
+    );
+
+    win_controls.edit_title = CreateWindow(
+        L"EDIT",
+        L"", // TODO
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_EDIT_TITLE,
+        instance, NULL
+    );
+
+    win_controls.button_name_search = CreateWindow(
         L"BUTTON",
         L"Search by name",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-        10, 40, 84, 22,
+        0, 0, 0, 0,
         main_window,
-        (HMENU) ID_BTN_NAME_SEARCH,
+        (HMENU) ID_EDIT_TITLE,
         instance, NULL
     );
 
     EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
 
+    // gets rid of ugly dotted lines on button focus
+    // TODO does this need to be sent each time focus is changed with tab key?
+    SendMessage(main_window, WM_CHANGEUISTATE, (WPARAM) MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+
+    RECT client_rect;
+    GetClientRect(main_window, &client_rect);
+    set_win_layout(&win_controls, client_rect.right, client_rect.bottom);
 
     ShowWindow(main_window, show_code);
-    SetFocus(hash_search_button); // set focus on first child (TODO will need updating when layout is updated)
-    // TODO do all applications really have to explicitly set focus on the first element for things to behave correctly?
+    SetFocus(win_controls.button_hash_search); // set focus on first child (gets tabbing to work correctly)
 
     // TODO handle button presses
 
