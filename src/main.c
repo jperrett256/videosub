@@ -63,44 +63,70 @@ void set_win_layout(win_controls_t * win_controls, int client_width, int client_
     #define ROW_HEIGHT      22 // height of most controls
     #define NUM_COLUMNS     4
 
+    #define BUTTON_HEIGHT   ROW_HEIGHT
+    #define STATIC_HEIGHT   20
+    #define COMBO_HEIGHT    20
+    #define EDIT_HEIGHT     20
+
+    #define LIST_BOX_GAP    25
+
     int current_x, current_y;
     int column_width = (client_width - 2 * MARGIN_SIZE - (NUM_COLUMNS - 1) * COLUMN_GAP) / NUM_COLUMNS;
 
     current_x = MARGIN_SIZE;
     current_y = MARGIN_SIZE;
 
-    SetWindowPos(win_controls->static_sub_lang, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->static_sub_lang, NULL, current_x, current_y, column_width, STATIC_HEIGHT, SWP_NOZORDER);
     current_x += column_width + COLUMN_GAP;
-    SetWindowPos(win_controls->combo_sub_lang, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->combo_sub_lang, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, COMBO_HEIGHT, SWP_NOZORDER);
     current_x += column_width * 2 + COLUMN_GAP * 2;
-    SetWindowPos(win_controls->button_hash_search, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->button_hash_search, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
 
     current_x = MARGIN_SIZE;
     current_y += ROW_HEIGHT + ROW_GAP;
 
-    SetWindowPos(win_controls->static_title, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->static_title, NULL, current_x, current_y, column_width, STATIC_HEIGHT, SWP_NOZORDER);
     current_x += column_width + COLUMN_GAP;
-    SetWindowPos(win_controls->edit_title, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->edit_title, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, EDIT_HEIGHT, SWP_NOZORDER);
     current_x += column_width * 2 + COLUMN_GAP * 2;
-    SetWindowPos(win_controls->button_name_search, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->button_name_search, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
 
     current_x = MARGIN_SIZE;
     current_y += ROW_HEIGHT + ROW_GAP;
 
-    SetWindowPos(win_controls->static_season, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->static_season, NULL, current_x, current_y, column_width, STATIC_HEIGHT, SWP_NOZORDER);
     current_x += column_width + COLUMN_GAP;
-    SetWindowPos(win_controls->edit_season, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->edit_season, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, EDIT_HEIGHT, SWP_NOZORDER);
 
     current_x = MARGIN_SIZE;
     current_y += ROW_HEIGHT + ROW_GAP;
 
-    SetWindowPos(win_controls->static_episode, NULL, current_x, current_y, column_width, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->static_episode, NULL, current_x, current_y, column_width, STATIC_HEIGHT, SWP_NOZORDER);
     current_x += column_width + COLUMN_GAP;
-    SetWindowPos(win_controls->edit_episode, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, ROW_HEIGHT, SWP_NOZORDER);
+    SetWindowPos(win_controls->edit_episode, NULL, current_x, current_y, column_width * 2 + COLUMN_GAP, EDIT_HEIGHT, SWP_NOZORDER);
 
-    // SetWindowPos(win_controls->list_box_subs)
+    current_x = MARGIN_SIZE;
+    current_y += ROW_HEIGHT + ROW_GAP;
 
-    // TODO
+    int list_box_height = client_height - (current_y + LIST_BOX_GAP + ROW_HEIGHT + ROW_GAP + MARGIN_SIZE);
+
+    SetWindowPos(win_controls->list_box_subs, NULL, current_x, current_y, column_width * 4 + COLUMN_GAP * 3, list_box_height, SWP_NOZORDER);
+
+    current_x = MARGIN_SIZE;
+    current_y += list_box_height + LIST_BOX_GAP;
+
+    SetWindowPos(win_controls->button_help, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->button_config, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->button_load, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
+    current_x += column_width + COLUMN_GAP;
+    SetWindowPos(win_controls->button_save_as, NULL, current_x, current_y, column_width, BUTTON_HEIGHT, SWP_NOZORDER);
+
+    current_x = MARGIN_SIZE;
+    current_y += ROW_HEIGHT + ROW_GAP;
+
+    assert(current_y == client_height - MARGIN_SIZE);
 }
 
 LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
@@ -186,7 +212,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     win_controls.static_sub_lang = CreateWindow(
         L"STATIC",
         L"Subtitles language:",
-        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP, // TODO maybe SS_ENDELLIPSIS instead of just SS_LEFTNOWORDWRAP?
+        // TODO maybe SS_ENDELLIPSIS instead of just SS_LEFTNOWORDWRAP (on all static controls)?
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP,
         0, 0, 0, 0,
         main_window,
         (HMENU) ID_STATIC_SUB_LANG,
@@ -195,8 +222,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 
     win_controls.combo_sub_lang = CreateWindow(
         L"COMBOBOX",
-        L"TODO", // TODO
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST,
+        L"", // TODO
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST, // TODO CBS_SORT?
         0, 0, 0, 0,
         main_window,
         (HMENU) ID_COMBO_SUB_LANG,
@@ -216,7 +243,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     win_controls.static_title = CreateWindow(
         L"STATIC",
         L"Title:",
-        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP, // TODO maybe SS_ENDELLIPSIS instead of just SS_LEFTNOWORDWRAP?
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP,
         0, 0, 0, 0,
         main_window,
         (HMENU) ID_STATIC_TITLE,
@@ -225,7 +252,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 
     win_controls.edit_title = CreateWindow(
         L"EDIT",
-        L"", // TODO
+        L"",
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
         0, 0, 0, 0,
         main_window,
@@ -239,11 +266,120 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
         WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
         0, 0, 0, 0,
         main_window,
+        (HMENU) ID_BTN_NAME_SEARCH,
+        instance, NULL
+    );
+
+    win_controls.static_season = CreateWindow(
+        L"STATIC",
+        L"Season:",
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_STATIC_TITLE,
+        instance, NULL
+    );
+
+    win_controls.edit_season = CreateWindow(
+        L"EDIT",
+        L"",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
+        0, 0, 0, 0,
+        main_window,
         (HMENU) ID_EDIT_TITLE,
         instance, NULL
     );
 
-    EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
+    win_controls.static_episode = CreateWindow(
+        L"STATIC",
+        L"Episode:",
+        WS_VISIBLE | WS_CHILD | SS_CENTERIMAGE | SS_LEFTNOWORDWRAP,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_STATIC_EPISODE,
+        instance, NULL
+    );
+
+    win_controls.edit_episode = CreateWindow(
+        L"EDIT",
+        L"",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | WS_BORDER,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_EDIT_EPISODE,
+        instance, NULL
+    );
+
+    win_controls.list_box_subs = CreateWindow(
+        L"ListBox", // TODO could also use WC_LISTBOX from "CommCtrl.h"
+        L"",
+        WS_VISIBLE | WS_CHILD | WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_LIST_BOX_SUBS,
+        instance, NULL
+    );
+
+    win_controls.button_help = CreateWindow(
+        L"BUTTON",
+        L"Help",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_BTN_HELP,
+        instance, NULL
+    );
+
+    win_controls.button_config = CreateWindow(
+        L"BUTTON",
+        L"Config",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_BTN_CONFIG,
+        instance, NULL
+    );
+
+    win_controls.button_load = CreateWindow(
+        L"BUTTON",
+        L"Load",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_BTN_LOAD,
+        instance, NULL
+    );
+
+    win_controls.button_save_as = CreateWindow(
+        L"BUTTON",
+        L"Save As",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+        0, 0, 0, 0,
+        main_window,
+        (HMENU) ID_BTN_SAVE_AS,
+        instance, NULL
+    );
+
+    // TODO sort font stuff
+    // recommended method, but I don't like the font
+    // NONCLIENTMETRICS metrics =
+    // {
+    //  .cbSize = sizeof(NONCLIENTMETRICS)
+    // };
+    // SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
+    // OutputDebugStringW(metrics.lfCaptionFont.lfFaceName); // DEBUG - gives Segoe UI
+    // EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&metrics.lfCaptionFont));
+
+    // EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
+    LOGFONT dbg_logfont;
+    GetObject((HFONT) GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &dbg_logfont);
+    OutputDebugStringW(dbg_logfont.lfFaceName); // DEBUG - gives MS Shell Dlg
+    char buf[1024];
+    stbsp_snprintf(buf, sizeof(buf), "%d\n", dbg_logfont.lfWeight);
+    OutputDebugStringA(buf); // DEBUG - gives FW_NORMAL (400)
+    // dbg_logfont.lfWeight = FW_BOLD;
+    EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&dbg_logfont));
+
 
     // gets rid of ugly dotted lines on button focus
     // TODO does this need to be sent each time focus is changed with tab key?
