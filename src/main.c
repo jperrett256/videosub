@@ -360,25 +360,62 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
         instance, NULL
     );
 
-    // TODO sort font stuff
-    // recommended method, but I don't like the font
-    // NONCLIENTMETRICS metrics =
-    // {
-    //  .cbSize = sizeof(NONCLIENTMETRICS)
-    // };
-    // SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
-    // OutputDebugStringW(metrics.lfCaptionFont.lfFaceName); // DEBUG - gives Segoe UI
-    // EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&metrics.lfCaptionFont));
 
-    // EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) GetStockObject(DEFAULT_GUI_FONT));
-    LOGFONT dbg_logfont;
-    GetObject((HFONT) GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &dbg_logfont);
-    OutputDebugStringW(dbg_logfont.lfFaceName); // DEBUG - gives MS Shell Dlg
-    char buf[1024];
-    stbsp_snprintf(buf, sizeof(buf), "%d\n", dbg_logfont.lfWeight);
-    OutputDebugStringA(buf); // DEBUG - gives FW_NORMAL (400)
-    // dbg_logfont.lfWeight = FW_BOLD;
-    EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&dbg_logfont));
+    // DEBUG
+    {
+        LOGFONT dbg_logfont;
+
+        /* This sets:
+         * .lfHeight = -12,
+         * .lfWeight = FW_NORMAL, // = 400
+         * .lfFaceName = L"MS Shell Dlg"
+         * and everything else to 0
+         */
+        // GetObject((HFONT) GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &dbg_logfont);
+
+        /* This sets:
+         * .lfHeight = -11,
+         * .lfWeight = FW_NORMAL, // = 400
+         * .lfCharSet = DEFAULT_CHARSET, // = 1
+         * .lfQuality = CLEARTYPE_QUALITY, // = 5
+         * .lfFaceName = L"Microsoft YaHei UI"
+         * and everything else to 0
+         * NOTE my display language is chinese, it might set this
+         * to L"Segoe UI" when English is the display language
+         */
+        NONCLIENTMETRICS metrics =
+        {
+         .cbSize = sizeof(NONCLIENTMETRICS)
+        };
+        SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
+        dbg_logfont = metrics.lfCaptionFont;
+
+        char buf[1024];
+        int bytes_written = 0;
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfHeight: %d\n", dbg_logfont.lfHeight);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfWidth: %d\n", dbg_logfont.lfWidth);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfEscapement: %d\n", dbg_logfont.lfEscapement);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfOrientation: %d\n", dbg_logfont.lfOrientation);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfWeight: %d\n", dbg_logfont.lfWeight);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfItalic: %hhu\n", dbg_logfont.lfItalic);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfUnderline: %hhu\n", dbg_logfont.lfUnderline);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfStrikeOut: %hhu\n", dbg_logfont.lfStrikeOut);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfCharSet: %hhu\n", dbg_logfont.lfCharSet);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfOutPrecision: %hhu\n", dbg_logfont.lfOutPrecision);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfClipPrecision: %hhu\n", dbg_logfont.lfClipPrecision);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfQuality: %hhu\n", dbg_logfont.lfQuality);
+        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfPitchAndFamily: %hhu\n", dbg_logfont.lfPitchAndFamily);
+        OutputDebugStringA(buf);
+        OutputDebugStringW(dbg_logfont.lfFaceName); // DEBUG - gives MS Shell Dlg
+    }
+
+    LOGFONT font_attributes =
+    {
+        .lfHeight = -11,
+        .lfWeight = FW_NORMAL,
+        .lfFaceName = L"MS Shell Dlg"
+    };
+    EnumChildWindows(main_window, (WNDENUMPROC) set_font, (LPARAM) CreateFontIndirect(&font_attributes));
 
 
     // gets rid of ugly dotted lines on button focus
