@@ -43,6 +43,7 @@ struct win_controls_t
     HWND static_title;
     HWND static_season;
     HWND static_episode;
+    // TODO create control for displaying errors/warnings
 
     HWND edit_title;
     HWND edit_season;
@@ -50,10 +51,82 @@ struct win_controls_t
 
     HWND combo_sub_lang;
 
-    HWND list_box_subs; // TODO create listbox
+    HWND list_box_subs;
+};
+
+#define PATH_LENGTH_LIMIT 512 // TODO can do sth dynamic later if you want
+
+typedef struct config_t config_t;
+struct config_t
+{
+    char curl_location[PATH_LENGTH_LIMIT]; // TODO default should be C:\Windows\System32\curl.exe
 };
 
 global_variable win_controls_t win_controls = {0};
+
+void api_request(config_t * config, char * url, char * method, char * other_args)
+{
+    char * api_key = "Y4NKks8ItQc9ZunAMUVlS1iUmVdk81Pk";
+    char * user_agent = "videosub 0.1.0";
+
+    char all_arguments[2048];
+    int bytes_written = 0;
+    bytes_written += stbsp_snprintf(
+        &all_arguments[bytes_written], sizeof(all_arguments) - bytes_written,
+        "--location --url \"%s\" --request \"%s\" -H \"Api-Key: %s\" -H \"User-Agent: %s\""
+        " -H \"Content-Type: application/json\" -H \"Accept: */*\""
+        , url, method, api_key, user_agent
+    );
+
+    assert(bytes_written < sizeof(all_arguments));
+
+    if (other_args)
+    {
+        // TODO should think about all the ways api_request() will be called, and whether other_args makes sense
+        bytes_written += stbsp_snprintf(
+            &all_arguments[bytes_written], sizeof(all_arguments) - bytes_written,
+            " %s", other_args
+        );
+    }
+
+    assert(bytes_written < sizeof(all_arguments));
+
+    STARTUPINFOA startup_info =
+    {
+        .cb = sizeof(STARTUPINFO)
+    };
+    // TODO alternative to manual initialisation: GetStartupInfo(&startup_info);
+
+    PROCESS_INFORMATION process_info = {0};
+
+    // TODO probably want to use CreateProcessW, but need to convert string arguments first
+    BOOL success = CreateProcessA(
+        config->curl_location,
+        all_arguments,
+        NULL,
+        NULL,
+        FALSE,
+        CREATE_UNICODE_ENVIRONMENT, // TODO other process creation flags
+        NULL,
+        NULL,
+        &startup_info,
+        &process_info
+    );
+
+    if (!success)
+    {
+        // TODO replace with warning/error system
+        assert(0);
+    }
+}
+
+// TODO config window stuff
+// BOOL save_config(config_t * config, config_controls_t * controls)
+// {
+//     // try saving everything
+//     // if we have an issue, throw up a message dialog box and return FALSE (indicates not to close config dialog)
+//     return TRUE;
+// }
 
 void set_win_layout(win_controls_t * win_controls, int client_width, int client_height)
 {
@@ -361,57 +434,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     );
 
 
-    // DEBUG
-    {
-        LOGFONT dbg_logfont;
-
-        /* This sets:
-         * .lfHeight = -12,
-         * .lfWeight = FW_NORMAL, // = 400
-         * .lfFaceName = L"MS Shell Dlg"
-         * and everything else to 0
-         */
-        // GetObject((HFONT) GetStockObject(DEFAULT_GUI_FONT), sizeof(LOGFONT), &dbg_logfont);
-
-        /* This sets:
-         * .lfHeight = -11,
-         * .lfWeight = FW_NORMAL, // = 400
-         * .lfCharSet = DEFAULT_CHARSET, // = 1
-         * .lfQuality = CLEARTYPE_QUALITY, // = 5
-         * .lfFaceName = L"Microsoft YaHei UI"
-         * and everything else to 0
-         * NOTE my display language is chinese, it might set this
-         * to L"Segoe UI" when English is the display language
-         */
-        NONCLIENTMETRICS metrics =
-        {
-         .cbSize = sizeof(NONCLIENTMETRICS)
-        };
-        SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
-        dbg_logfont = metrics.lfCaptionFont;
-
-        char buf[1024];
-        int bytes_written = 0;
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfHeight: %d\n", dbg_logfont.lfHeight);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfWidth: %d\n", dbg_logfont.lfWidth);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfEscapement: %d\n", dbg_logfont.lfEscapement);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfOrientation: %d\n", dbg_logfont.lfOrientation);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfWeight: %d\n", dbg_logfont.lfWeight);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfItalic: %hhu\n", dbg_logfont.lfItalic);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfUnderline: %hhu\n", dbg_logfont.lfUnderline);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfStrikeOut: %hhu\n", dbg_logfont.lfStrikeOut);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfCharSet: %hhu\n", dbg_logfont.lfCharSet);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfOutPrecision: %hhu\n", dbg_logfont.lfOutPrecision);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfClipPrecision: %hhu\n", dbg_logfont.lfClipPrecision);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfQuality: %hhu\n", dbg_logfont.lfQuality);
-        bytes_written += stbsp_snprintf(&buf[bytes_written], sizeof(buf) - bytes_written, "lfPitchAndFamily: %hhu\n", dbg_logfont.lfPitchAndFamily);
-        OutputDebugStringA(buf);
-        OutputDebugStringW(dbg_logfont.lfFaceName); // DEBUG - gives MS Shell Dlg
-    }
-
     LOGFONT font_attributes =
     {
-        .lfHeight = -11,
+        .lfHeight = -12,
         .lfWeight = FW_NORMAL,
         .lfFaceName = L"MS Shell Dlg"
     };
