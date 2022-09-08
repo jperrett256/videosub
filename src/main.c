@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <windows.h>
+#include <wininet.h>
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
@@ -54,70 +55,189 @@ struct win_controls_t
     HWND list_box_subs;
 };
 
-#define PATH_LENGTH_LIMIT 512 // TODO can do sth dynamic later if you want
+// #define CONFIG_STR_LIMIT 512 // TODO can do sth dynamic later if you want
 
-typedef struct config_t config_t;
-struct config_t
-{
-    char curl_location[PATH_LENGTH_LIMIT]; // TODO default should be C:\Windows\System32\curl.exe
-};
+// typedef struct config_t config_t;
+// struct config_t
+// {
+//     char username[CONFIG_STR_LIMIT];
+//     char password[CONFIG_STR_LIMIT];
+// };
 
 global_variable win_controls_t win_controls = {0};
 
-void api_request(config_t * config, char * url, char * method, char * other_args)
+void api_request() // TODO args
 {
     char * api_key = "Y4NKks8ItQc9ZunAMUVlS1iUmVdk81Pk";
     char * user_agent = "videosub 0.1.0";
 
-    char all_arguments[2048];
+    HINTERNET internet_open_handle = InternetOpenA(
+        user_agent,
+        INTERNET_OPEN_TYPE_PRECONFIG,
+        NULL,
+        NULL,
+        0 // TODO should use INTERNET_FLAG_ASYNC later
+    );
+
+    if (!internet_open_handle)
+    {
+        // TODO handle with error system
+        assert(0);
+        DWORD error_code = GetLastError();
+        return;
+    }
+
+    HINTERNET internet_connect_handle = InternetConnectA(
+        internet_open_handle,
+        "api.opensubtitles.com",
+        INTERNET_DEFAULT_HTTPS_PORT,
+        NULL,
+        NULL,
+        INTERNET_SERVICE_HTTP,
+        0,
+        0 // TODO does dwContext need to be set to sth for async requests?
+    );
+
+    if (!internet_connect_handle)
+    {
+        // TODO handle with error system
+        assert(0);
+        DWORD error_code = GetLastError();
+        return;
+    }
+
+    char * accept_types[] = { "*/*", NULL };
+
+    // TODO how to add query params?
+    /* TODO must sanitize and correctly format query params
+       We do this by:
+       1. convert string to utf-8
+       2. then we percent encode:
+          - non-ASCII characters, i.e. 80-FF (this should allow for utf-8 support)
+          - all reserved keywords from RFC 3986
+            - reserved: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&' '\'' '(', ')', '*', '+', ',', ';', '='
+              - potentially could get away with more limited set: '&', '+', '#', '=', ';' (maybe '[', ']' as well)
+            - '%', since it is used for escaping
+          - Characters mentioned by RFC 1738 (despite being obsolete)
+            - ASCII control characters (00-1F, 7F)
+            - "Unsafe characters"?
+       3. replace spaces with '+' (can use "%20", but OpenSubtitles asks specifically for '+' over "%20")
+    */
+    HINTERNET internet_request_handle = HttpOpenRequestA(
+        internet_connect_handle,
+        NULL, // TODO "GET", "POST", etc. (make argument)
+        "/api/v1/infos/languages",
+        NULL,
+        NULL,
+        accept_types,
+        INTERNET_FLAG_SECURE, // TODO
+        0 // TODO does dwContext need to be set to sth for async requests
+    );
+
+    if (!internet_request_handle)
+    {
+        // TODO handle with error system
+        assert(0);
+        DWORD error_code = GetLastError();
+        return;
+    }
+
+    char headers[2048];
     int bytes_written = 0;
     bytes_written += stbsp_snprintf(
-        &all_arguments[bytes_written], sizeof(all_arguments) - bytes_written,
-        "--location --url \"%s\" --request \"%s\" -H \"Api-Key: %s\" -H \"User-Agent: %s\""
-        " -H \"Content-Type: application/json\" -H \"Accept: */*\""
-        , url, method, api_key, user_agent
+        &headers[bytes_written], sizeof(headers) - bytes_written,
+        // TODO charset may not be needed if body is always ASCII
+        "\"Api-Key: %s\"; \"Content-Type: application/json\"; charset=utf-8", api_key
     );
 
-    assert(bytes_written < sizeof(all_arguments));
+    assert(bytes_written < sizeof(headers));
 
-    if (other_args)
-    {
-        // TODO should think about all the ways api_request() will be called, and whether other_args makes sense
-        bytes_written += stbsp_snprintf(
-            &all_arguments[bytes_written], sizeof(all_arguments) - bytes_written,
-            " %s", other_args
-        );
-    }
-
-    assert(bytes_written < sizeof(all_arguments));
-
-    STARTUPINFOA startup_info =
-    {
-        .cb = sizeof(STARTUPINFO)
-    };
-    // TODO alternative to manual initialisation: GetStartupInfo(&startup_info);
-
-    PROCESS_INFORMATION process_info = {0};
-
-    // TODO probably want to use CreateProcessW, but need to convert string arguments first
-    BOOL success = CreateProcessA(
-        config->curl_location,
-        all_arguments,
+    BOOL request_success = HttpSendRequestA(
+        internet_request_handle,
+        headers,
+        -1,
+        // TODO will need these last two when doing downloads
+        // TODO shouldn't actually need to use WideCharToMultiByte or anything on body since should always be ASCII
         NULL,
-        NULL,
-        FALSE,
-        CREATE_UNICODE_ENVIRONMENT, // TODO other process creation flags
-        NULL,
-        NULL,
-        &startup_info,
-        &process_info
+        0
     );
 
-    if (!success)
+    if (!request_success)
     {
-        // TODO replace with warning/error system
+        // TODO handle with error system
         assert(0);
     }
+
+    char status_code_buf[6];
+    DWORD status_code_len = sizeof(status_code_buf) - 1;
+
+    BOOL query_info_success = HttpQueryInfoA(
+        internet_request_handle,
+        HTTP_QUERY_STATUS_CODE, // TODO can use HTTP_QUERY_RAW_HEADERS to get all headers
+        status_code_buf,
+        &status_code_len,
+        0
+    );
+
+    assert(query_info_success != ERROR_INSUFFICIENT_BUFFER);
+
+    if (!query_info_success)
+    {
+        // TODO handle, use GetLastError
+        assert(0);
+    }
+
+    assert(status_code_len < sizeof(status_code_buf));
+    status_code_buf[status_code_len] = '\0';
+
+    // TODO need to write strcmp function
+    OutputDebugStringA(status_code_buf);
+    OutputDebugStringA("\n");
+
+    // TODO just create one success variable instead of a different one for each function
+    DWORD response_bytes_available = 0;
+    BOOL query_available_success = InternetQueryDataAvailable(internet_request_handle, &response_bytes_available, 0, 0);
+
+    assert(response_bytes_available > 0);
+
+    if (!query_available_success)
+    {
+        // TODO handle, use GetLastError
+        assert(0);
+        // TODO does this fail if the response has no payload?
+    }
+
+    DWORD dbg_response_size = 0;
+    while (1)
+    {
+        char response_buffer[64];
+        DWORD response_len;
+
+        BOOL response_success = InternetReadFile(
+            internet_request_handle,
+            response_buffer,
+            sizeof(response_buffer) - 1,
+            &response_len
+        );
+
+        if (!request_success)
+        {
+            // TODO handle
+            assert(0);
+        }
+
+        if (response_len == 0) break;
+
+        assert(response_len < sizeof(response_buffer));
+        response_buffer[response_len] = 0;
+
+        dbg_response_size += response_len;
+
+        OutputDebugStringA(response_buffer);
+        OutputDebugStringA("\n");
+    }
+
+    assert(dbg_response_size == response_bytes_available);
 }
 
 // TODO config window stuff
@@ -455,6 +575,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     SetFocus(win_controls.button_hash_search); // set focus on first child (gets tabbing to work correctly)
 
     // TODO handle button presses
+
+    api_request(); // DEBUG
 
     /* TODO could be worth trying modeless dialog boxes (CreateDialog/CreateDialogIndirect)
      * Can apply fonts more easily with DS_SHELLFONT or DS_SETFONT dialog box styles.

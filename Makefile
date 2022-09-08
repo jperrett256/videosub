@@ -14,7 +14,7 @@ COMPILER_OPTIONS = /Fo$(BUILD_DIR) /Fe$(EXE_FILE) /Fd$(BUILD_DIR) /I$(INC_DIR) /
 COMPILER_OPTIONS_DEBUG := $(COMPILER_OPTIONS) /DEBUG:FULL /Zi
 COMPILER_OPTIONS_RELEASE := $(COMPILER_OPTIONS)
 
-LINKER_OPTIONS = /link user32.lib gdi32.lib /subsystem:windows /MANIFEST:EMBED "/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+LINKER_OPTIONS = /link user32.lib gdi32.lib wininet.lib /subsystem:windows /MANIFEST:EMBED "/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
 
 # comctl32.dll uxtheme.dll
 default: debug
