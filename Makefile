@@ -19,6 +19,10 @@ LINKER_OPTIONS = /link user32.lib gdi32.lib wininet.lib /subsystem:windows /MANI
 # comctl32.dll uxtheme.dll
 default: debug
 
+# uses HTTP instead of HTTPS, useful for viewing exactly what you are sending (using a tool like Wireshark)
+debug_network: build_dir
+	$(CXX) $(COMPILER_OPTIONS_DEBUG) /DVSUB_DEBUG_NETWORK $(SRC_DIR)$(SRC_FILE) $(LINKER_OPTIONS)
+
 debug: build_dir
 	$(CXX) $(COMPILER_OPTIONS_DEBUG) $(SRC_DIR)$(SRC_FILE) $(LINKER_OPTIONS)
 

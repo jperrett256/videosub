@@ -1,3 +1,6 @@
+#ifndef COMMON_H_INCLUDE
+#define COMMON_H_INCLUDE
+
 #include <stdint.h>
 
 typedef int8_t      i8;
@@ -23,3 +26,14 @@ typedef double  f64;
 #define internal static
 #define global_variable static
 #define local_persist static
+
+typedef struct str8 str8;
+struct str8
+{
+    char * str;
+    i64 size;
+};
+
+#define str8_lit(x) (str8) { .str = (char *) (x), .size = sizeof(x) - 1 }
+
+#endif /* COMMON_H_INCLUDE */

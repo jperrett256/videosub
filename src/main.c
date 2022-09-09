@@ -66,9 +66,8 @@ struct win_controls_t
 
 global_variable win_controls_t win_controls = {0};
 
-void api_request() // TODO args
+HINTERNET api_get_handle()
 {
-    char * api_key = "Y4NKks8ItQc9ZunAMUVlS1iUmVdk81Pk";
     char * user_agent = "videosub 0.1.0";
 
     HINTERNET internet_open_handle = InternetOpenA(
@@ -84,13 +83,17 @@ void api_request() // TODO args
         // TODO handle with error system
         assert(0);
         DWORD error_code = GetLastError();
-        return;
+        return NULL;
     }
 
     HINTERNET internet_connect_handle = InternetConnectA(
         internet_open_handle,
         "api.opensubtitles.com",
+#ifdef VSUB_DEBUG_NETWORK
+        INTERNET_DEFAULT_HTTP_PORT,
+#else
         INTERNET_DEFAULT_HTTPS_PORT,
+#endif
         NULL,
         NULL,
         INTERNET_SERVICE_HTTP,
@@ -103,34 +106,37 @@ void api_request() // TODO args
         // TODO handle with error system
         assert(0);
         DWORD error_code = GetLastError();
-        return;
+        return NULL;
     }
+
+    return internet_connect_handle;
+}
+
+/****************** api_request ******************
+ * internet_handle: handle from api_get_handle()
+ * method: "GET", "POST", etc. (NULL -> "GET")
+ * path: path to send request to
+ * data: utf-8 encoded payload data (can be NULL)
+ * data_len: size of that payload data, in bytes
+ *************************************************/
+void api_request(HINTERNET internet_handle, char * method, char * path, void * data, u32 data_len)
+{
+    char * api_key = "Y4NKks8ItQc9ZunAMUVlS1iUmVdk81Pk";
 
     char * accept_types[] = { "*/*", NULL };
 
-    // TODO how to add query params?
-    /* TODO must sanitize and correctly format query params
-       We do this by:
-       1. convert string to utf-8
-       2. then we percent encode:
-          - non-ASCII characters, i.e. 80-FF (this should allow for utf-8 support)
-          - all reserved keywords from RFC 3986
-            - reserved: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&' '\'' '(', ')', '*', '+', ',', ';', '='
-              - potentially could get away with more limited set: '&', '+', '#', '=', ';' (maybe '[', ']' as well)
-            - '%', since it is used for escaping
-          - Characters mentioned by RFC 1738 (despite being obsolete)
-            - ASCII control characters (00-1F, 7F)
-            - "Unsafe characters"?
-       3. replace spaces with '+' (can use "%20", but OpenSubtitles asks specifically for '+' over "%20")
-    */
     HINTERNET internet_request_handle = HttpOpenRequestA(
-        internet_connect_handle,
-        NULL, // TODO "GET", "POST", etc. (make argument)
-        "/api/v1/infos/languages",
+        internet_handle,
+        method,
+        path,
         NULL,
         NULL,
         accept_types,
-        INTERNET_FLAG_SECURE, // TODO
+#ifdef VSUB_DEBUG_NETWORK
+        0,
+#else
+        INTERNET_FLAG_SECURE,
+#endif
         0 // TODO does dwContext need to be set to sth for async requests
     );
 
@@ -146,23 +152,25 @@ void api_request() // TODO args
     int bytes_written = 0;
     bytes_written += stbsp_snprintf(
         &headers[bytes_written], sizeof(headers) - bytes_written,
-        // TODO charset may not be needed if body is always ASCII
-        "\"Api-Key: %s\"; \"Content-Type: application/json\"; charset=utf-8", api_key
+        "Api-Key: %s\r\n"
+        "Content-Type: application/json; charset=utf-8\r\n",
+        api_key
     );
+    // NOTE wireshark shows that it does not matter if you add \r\n to the final header (if not there, wininet adds it for you)
 
     assert(bytes_written < sizeof(headers));
 
-    BOOL request_success = HttpSendRequestA(
+    BOOL success;
+
+    success = HttpSendRequestA(
         internet_request_handle,
         headers,
         -1,
-        // TODO will need these last two when doing downloads
-        // TODO shouldn't actually need to use WideCharToMultiByte or anything on body since should always be ASCII
-        NULL,
-        0
+        data,
+        data_len
     );
 
-    if (!request_success)
+    if (!success) // HttpSendRequestA
     {
         // TODO handle with error system
         assert(0);
@@ -171,7 +179,7 @@ void api_request() // TODO args
     char status_code_buf[6];
     DWORD status_code_len = sizeof(status_code_buf) - 1;
 
-    BOOL query_info_success = HttpQueryInfoA(
+    success = HttpQueryInfoA(
         internet_request_handle,
         HTTP_QUERY_STATUS_CODE, // TODO can use HTTP_QUERY_RAW_HEADERS to get all headers
         status_code_buf,
@@ -179,9 +187,9 @@ void api_request() // TODO args
         0
     );
 
-    assert(query_info_success != ERROR_INSUFFICIENT_BUFFER);
+    assert(success != ERROR_INSUFFICIENT_BUFFER);
 
-    if (!query_info_success)
+    if (!success) // HttpQueryInfoA
     {
         // TODO handle, use GetLastError
         assert(0);
@@ -194,33 +202,23 @@ void api_request() // TODO args
     OutputDebugStringA(status_code_buf);
     OutputDebugStringA("\n");
 
-    // TODO just create one success variable instead of a different one for each function
-    DWORD response_bytes_available = 0;
-    BOOL query_available_success = InternetQueryDataAvailable(internet_request_handle, &response_bytes_available, 0, 0);
+    // NOTE InternetQueryDataAvailable returns the number of bytes _immediately_ available for reading, not the total response size
 
-    assert(response_bytes_available > 0);
-
-    if (!query_available_success)
-    {
-        // TODO handle, use GetLastError
-        assert(0);
-        // TODO does this fail if the response has no payload?
-    }
-
-    DWORD dbg_response_size = 0;
+    // TODO move outside this function
     while (1)
     {
+        // TODO note that the response is utf8 (will need converting before handling properly)
         char response_buffer[64];
         DWORD response_len;
 
-        BOOL response_success = InternetReadFile(
+        success = InternetReadFile(
             internet_request_handle,
             response_buffer,
             sizeof(response_buffer) - 1,
             &response_len
         );
 
-        if (!request_success)
+        if (!success) // InternetReadFile
         {
             // TODO handle
             assert(0);
@@ -231,13 +229,9 @@ void api_request() // TODO args
         assert(response_len < sizeof(response_buffer));
         response_buffer[response_len] = 0;
 
-        dbg_response_size += response_len;
-
         OutputDebugStringA(response_buffer);
         OutputDebugStringA("\n");
     }
-
-    assert(dbg_response_size == response_bytes_available);
 }
 
 // TODO config window stuff
@@ -359,11 +353,6 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
                 OutputDebugStringA(buf);
             }
         } break;
-
-        // default:
-        // {
-
-        // } break;
     }
 
     return DefWindowProc(window, message, w_param, l_param);
@@ -576,17 +565,33 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 
     // TODO handle button presses
 
-    api_request(); // DEBUG
+    HINTERNET internet_handle = api_get_handle();
 
-    /* TODO could be worth trying modeless dialog boxes (CreateDialog/CreateDialogIndirect)
-     * Can apply fonts more easily with DS_SHELLFONT or DS_SETFONT dialog box styles.
-     * Will have to use the IsDialogMessage function when handling messages.
-     *
-     * Can the main window be a dialog box?
-     * Could also try giving in and creating a resource file containing dialog templates, as they suggest.
-     * Could (if really motivated) creating the dialog template in memory and using CreateDialog
-     */
+    // DEBUG
+    {
+        /* TODO need function to sanitize and correctly format data in query params
+           We do this by:
+           1. convert string to utf-8
+           2. then we percent encode:
+              - non-ASCII characters, i.e. 80-FF (this should allow for utf-8 support)
+              - all reserved keywords from RFC 3986
+                - reserved: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&' '\'' '(', ')', '*', '+', ',', ';', '='
+                  - potentially could get away with more limited set: '&', '+', '#', '=', ';' (maybe '[', ']' as well)
+                - '%', since it is used for escaping
+              - Characters mentioned by RFC 1738 (despite being obsolete)
+                - ASCII control characters (00-1F, 7F)
+                - "Unsafe characters"?
+           3. replace spaces with '+' (can use "%20", but OpenSubtitles asks specifically for '+' over "%20")
+        */
 
+        api_request(internet_handle, "GET", "/api/v1/infos/languages", NULL, 0);
+
+        api_request(internet_handle, "GET", "/api/v1/subtitles?query=bee+movie", NULL, 0);
+
+        str8 request_data = str8_lit("{\"file_id\": 123}");
+
+        api_request(internet_handle, "POST", "/api/v1/download", request_data.str, (u32) request_data.size);
+    }
 
     MSG message;
     while (GetMessage(&message, main_window, 0, 0) > 0)
