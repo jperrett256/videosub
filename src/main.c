@@ -6,14 +6,26 @@
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
+
+#define JDP_COMMON_IMPLEMENTATION
 #include "common.h"
 
 #define WINDOW_MIN_WIDTH    420
 #define WINDOW_MIN_HEIGHT   300
 
-
+/* NOTE control IDs are typically assigned at values starting at 100,
+ * as the lower values are taken. This is never explicitly stated in
+ * any MSDN documentation I found, but I encountered strange issues
+ * when using IDs that were too low. (When I hit the escape key, it
+ * triggered a WM_COMMAND message to be sent to my window procedure
+ * that was indistiguishable from pressing a button with ID set to 2.
+ * Even the lParam value indicated it came from the control I made!)
+ *
+ * Source is an article by Raymond Chen:
+ * https://devblogs.microsoft.com/oldnewthing/20041214-00/?p=37013
+ */
 enum control_id_t {
-    ID_BTN_HASH_SEARCH,
+    ID_BTN_HASH_SEARCH = 100,
     ID_BTN_NAME_SEARCH,
     ID_BTN_HELP,
     ID_BTN_CONFIG,
@@ -156,7 +168,9 @@ void api_request(HINTERNET internet_handle, char * method, char * path, void * d
         "Content-Type: application/json; charset=utf-8\r\n",
         api_key
     );
-    // NOTE wireshark shows that it does not matter if you add \r\n to the final header (if not there, wininet adds it for you)
+    /* NOTE testing with wireshark shows that it does not matter if you
+     * add \r\n to the final header (if not there, wininet adds it for you)
+     */
 
     assert(bytes_written < sizeof(headers));
 
@@ -221,6 +235,7 @@ void api_request(HINTERNET internet_handle, char * method, char * path, void * d
         if (!success) // InternetReadFile
         {
             // TODO handle
+            // TODO would InternetGetLastResponseInfoA be appropriate??
             assert(0);
         }
 
@@ -343,14 +358,20 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
             WORD button_identifier = LOWORD(w_param);
             WORD notification_code = HIWORD(w_param);
 
-            assert((HWND)l_param != NULL);
+            HWND control_handle = (HWND)l_param;
 
-            if (notification_code == BN_CLICKED)
+            if (notification_code == BN_CLICKED
+                && button_identifier == IDCANCEL
+                && control_handle == NULL)
             {
-                // DEBUG
-                char buf[1024];
-                stbsp_snprintf(buf, sizeof(buf), "button_identifier: %hu, notification_code: %hu\n", button_identifier, notification_code);
-                OutputDebugStringA(buf);
+                PostQuitMessage(0); // DEBUG code - escape quits
+            }
+
+            if (notification_code == BN_CLICKED && control_handle != NULL)
+            {
+                dbg_print("button_identifier: %hu, notification_code: %hu, control_handle: %p\n",
+                    button_identifier, notification_code, control_handle);
+                // TODO
             }
         } break;
     }
@@ -588,9 +609,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
 
         api_request(internet_handle, "GET", "/api/v1/subtitles?query=bee+movie", NULL, 0);
 
-        str8 request_data = str8_lit("{\"file_id\": 123}");
+        string_t request_data = string_lit("{\"file_id\": 123}");
 
-        api_request(internet_handle, "POST", "/api/v1/download", request_data.str, (u32) request_data.size);
+        api_request(internet_handle, "POST", "/api/v1/download", request_data.start, (u32) request_data.size);
     }
 
     MSG message;
