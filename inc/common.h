@@ -50,11 +50,11 @@ char * get_temp_buffer();
 typedef struct string_t string_t;
 struct string_t
 {
-    char * start;
+    char * ptr;
     i64 size;
 };
 
-#define string_lit(x) (string_t) { .start = (char *) (x), .size = sizeof(x) - 1 }
+#define string_lit(x) (string_t) { .ptr = (char *) (x), .size = sizeof(x) - 1 }
 
 
 typedef struct arena_t arena_t;

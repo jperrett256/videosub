@@ -335,6 +335,11 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
 {
     switch (message)
     {
+        case WM_CLOSE:
+        {
+            PostQuitMessage(0);
+        } break;
+
         case WM_GETMINMAXINFO:
         {
             LPMINMAXINFO min_max_info = (LPMINMAXINFO) l_param;
@@ -364,7 +369,8 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
                 && button_identifier == IDCANCEL
                 && control_handle == NULL)
             {
-                PostQuitMessage(0); // DEBUG code - escape quits
+                DestroyWindow(window); // DEBUG code - escape quits
+                break;
             }
 
             if (notification_code == BN_CLICKED && control_handle != NULL)
@@ -584,6 +590,39 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     ShowWindow(main_window, show_code);
     SetFocus(win_controls.button_hash_search); // set focus on first child (gets tabbing to work correctly)
 
+
+    // TODO use api to request the list, maybe also cache it
+    string_t language_options[] =
+    {
+        string_lit("English"),
+        string_lit("Chinese (simplified)"),
+        string_lit("Japanese")
+    };
+    u32 num_language_options = array_count(language_options);
+
+    for (i64 i = 0; i < num_language_options; i++)
+    {
+        // TODO add arena temps so that arenas can be shrunk again, instead of creating and freeing arenas all the time
+        arena_t scratch = arena_alloc(MEGABYTES(8));
+
+        string_t option = language_options[i];
+        assert(option.size >= 0 && option.size <= INT_MAX);
+        int option_size = (int) option.size;
+
+        int chars_required = MultiByteToWideChar(CP_UTF8, 0, option.ptr, option_size, NULL, 0);
+        wchar_t * buffer = arena_push_array(&scratch, wchar_t, chars_required);
+        int chars_written = MultiByteToWideChar(CP_UTF8, 0, option.ptr, option_size, buffer, chars_required);
+        assert(chars_written == chars_required);
+
+        SendMessage(win_controls.combo_sub_lang, CB_ADDSTRING, 0, (LPARAM) buffer);
+
+        arena_free(&scratch);
+    }
+
+    u32 selected_index = 0;
+    assert(selected_index < num_language_options);
+    SendMessage(win_controls.combo_sub_lang, CB_SETCURSEL, selected_index, (LPARAM) 0);
+
     // TODO handle button presses
 
     HINTERNET internet_handle = api_get_handle();
@@ -610,8 +649,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
         api_request(internet_handle, "GET", "/api/v1/subtitles?query=bee+movie", NULL, 0);
 
         string_t request_data = string_lit("{\"file_id\": 123}");
-
-        api_request(internet_handle, "POST", "/api/v1/download", request_data.start, (u32) request_data.size);
     }
 
     MSG message;
