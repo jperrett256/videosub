@@ -360,24 +360,59 @@ LRESULT CALLBACK main_window_proc(HWND window, UINT message, WPARAM w_param, LPA
 
         case WM_COMMAND:
         {
-            WORD button_identifier = LOWORD(w_param);
+            WORD control_identifier = LOWORD(w_param);
             WORD notification_code = HIWORD(w_param);
 
             HWND control_handle = (HWND)l_param;
 
             if (notification_code == BN_CLICKED
-                && button_identifier == IDCANCEL
+                && control_identifier == IDCANCEL
                 && control_handle == NULL)
             {
-                DestroyWindow(window); // DEBUG code - escape quits
+                PostQuitMessage(0); // DEBUG code - escape quits
                 break;
             }
 
-            if (notification_code == BN_CLICKED && control_handle != NULL)
+            if (control_handle != NULL)
             {
-                dbg_print("button_identifier: %hu, notification_code: %hu, control_handle: %p\n",
-                    button_identifier, notification_code, control_handle);
-                // TODO
+                switch (notification_code)
+                {
+                    case BN_CLICKED:
+                    {
+                        dbg_print("button identifier: %hu, notification code: %hu, control handle: %p\n",
+                            control_identifier, notification_code, control_handle);
+                        // TODO
+                    } break;
+                    case EN_UPDATE:
+                    {
+                        // TODO proper scratch arenas
+                        arena_t scratch = arena_alloc(MEGABYTES(8));
+
+                        dbg_print("edit control identifier: %hu, notification code: %hu, control handle: %p\n",
+                            control_identifier, notification_code, control_handle);
+
+                        // TODO how are we able to send this within the window procedure?
+                        LRESULT result;
+                        result = SendMessage(control_handle, WM_GETTEXTLENGTH, 0, 0);
+                        assert(result >= 0 && result < UINT32_MAX);
+                        u32 length = (u32) result;
+
+                        dbg_print("length: %d\n", length);
+                        u32 buffer_length = length + 1;
+                        wchar_t * buffer = arena_push_array(&scratch, wchar_t, buffer_length);
+
+                        result = SendMessage(control_handle, WM_GETTEXT, buffer_length, (LPARAM) buffer);
+                        assert(result >= 0 && result <= UINT32_MAX);
+                        assert((u32) result == length);
+
+                        // TODO make a dbg_print_utf8 function
+                        dbg_print("text: ");
+                        OutputDebugStringW(buffer);
+                        dbg_print("\n");
+
+                        arena_free(&scratch);
+                    } break;
+                }
             }
         } break;
     }
@@ -628,6 +663,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     HINTERNET internet_handle = api_get_handle();
 
     // DEBUG
+    dbg_print("EN_SETFOCUS: %d\n", EN_SETFOCUS);
+    dbg_print("EN_KILLFOCUS: %d\n", EN_KILLFOCUS);
+    dbg_print("EN_CHANGE: %d\n", EN_CHANGE);
+    dbg_print("EN_UPDATE: %d\n", EN_UPDATE);
+
+    // DEBUG
     {
         /* TODO need function to sanitize and correctly format data in query params
            We do this by:
@@ -644,15 +685,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
            3. replace spaces with '+' (can use "%20", but OpenSubtitles asks specifically for '+' over "%20")
         */
 
-        api_request(internet_handle, "GET", "/api/v1/infos/languages", NULL, 0);
+        // api_request(internet_handle, "GET", "/api/v1/infos/languages", NULL, 0);
 
-        api_request(internet_handle, "GET", "/api/v1/subtitles?query=bee+movie", NULL, 0);
+        // api_request(internet_handle, "GET", "/api/v1/subtitles?query=bee+movie", NULL, 0);
 
-        string_t request_data = string_lit("{\"file_id\": 123}");
+        // string_t request_data = string_lit("{\"file_id\": 123}");
     }
 
     MSG message;
-    while (GetMessage(&message, main_window, 0, 0) > 0)
+    while (GetMessage(&message, NULL, 0, 0) > 0)
     {
         if (IsDialogMessage(main_window, &message)) continue;
 
