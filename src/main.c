@@ -1,6 +1,9 @@
 #define UNICODE
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
+
 #include <windows.h>
 #include <wininet.h>
 
@@ -122,6 +125,153 @@ HINTERNET api_get_handle()
     }
 
     return internet_connect_handle;
+}
+
+static string_t string_from_unicode(arena_t * arena, wchar_t * str)
+{
+    // TODO could use WC_ERR_INVALID_CHARS to detect invalid code points
+    int chars_required = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
+    char * buffer = arena_push_array(arena, char, chars_required);
+    int chars_written = WideCharToMultiByte(CP_UTF8, 0, str, -1, buffer, chars_required, NULL, NULL);
+    assert(chars_written == chars_required);
+
+    string_t result = {0};
+    result.ptr = buffer;
+    result.size = chars_required - 1; // exclude null terminator
+    assert(result.ptr[result.size] == '\0');
+
+    return result;
+}
+
+// TODO wstring_t type?
+static wchar_t * string_to_unicode(arena_t * arena, string_t str)
+{
+    assert(str.size >= 0 && str.size <= INT_MAX);
+    int str_size = (int) str.size;
+
+    // TODO could use MB_ERR_INVALID_CHARS to detect invalid input characters
+    int chars_required = MultiByteToWideChar(CP_UTF8, 0, str.ptr, str_size, NULL, 0);
+    assert(chars_required < INT_MAX);
+    wchar_t * buffer = arena_push_array(arena, wchar_t, chars_required + 1);
+    int chars_written = MultiByteToWideChar(CP_UTF8, 0, str.ptr, str_size, buffer, chars_required);
+    assert(chars_written == chars_required);
+
+    // NOTE if input to MultiByteToWideChar isn't null terminated, neither is output from MultiByteToWideChar
+    // so we make sure to add it manually
+    buffer[chars_required] = '\0';
+
+    return buffer;
+}
+
+static string_t arena_sprintf(arena_t * arena, char * fmt, ...)
+{
+    va_list va;
+    va_start(va, fmt);
+
+    // TODO somewhat inefficient, effectively prints string twice
+    // TODO just create fixed size error buffer?
+
+    // NOTE only works for strings < 2 GiB
+    int str_len = stbsp_vsnprintf(NULL, 0, fmt, va);
+    assert(str_len >= 0);
+
+    va_end(va);
+    va_start(va, fmt);
+
+    char * str_buf = arena_push(arena, str_len + 1);
+    int bytes_written = stbsp_vsnprintf(str_buf, str_len + 1, fmt, va);
+    assert(bytes_written == str_len);
+
+    va_end(va);
+
+    // TODO string create function?
+    string_t result = { str_buf, str_len };
+    return result;
+}
+
+typedef struct hash_result_t hash_result_t;
+struct hash_result_t
+{
+    union
+    {
+        string_t error; // TODO null terminated string type? cstring_t?
+        string_t hash;
+    } as;
+    bool success;
+};
+
+static hash_result_t hash_error_result(string_t error)
+{
+    hash_result_t result = {0};
+    result.success = false;
+    result.as.error = error;
+
+    return result;
+}
+
+hash_result_t hash_get(arena_t * arena, wchar_t * filename)
+{
+    // NOTE method here is loosely based on public domain code from:
+    // https://trac.opensubtitles.org/projects/opensubtitles/wiki/HashSourceCodes
+
+    int fseek_success;
+
+    FILE * file = _wfopen(filename, L"rb");
+    if (!file)
+    {
+        string_t filename_utf8 = string_from_unicode(arena, filename);
+        return hash_error_result(arena_sprintf(arena,
+            "ERROR: failed to open \"%.*s\" for calculating hash.\n", string_varg(filename_utf8)));
+    }
+
+    fseek_success = fseek(file, 0, SEEK_END);
+    assert(fseek_success == 0);
+
+    i64 file_size = _ftelli64(file);
+    assert(file_size >= 0);
+
+    fseek_success = fseek(file, 0, SEEK_SET);
+    assert(fseek_success == 0);
+
+    if (file_size < KILOBYTES(64))
+    {
+        return hash_error_result(arena_sprintf(arena,
+            "ERROR: file is less than 64 KiB, hash unavailable.\n"));
+    }
+
+#define MOVIEHASH_BUFFER_SIZE (KILOBYTES(64)/sizeof(u64))
+
+    // NOTE assuming system is little endian
+
+    u64 hash = file_size;
+
+    u64 buffer[MOVIEHASH_BUFFER_SIZE];
+    size_t elements_read;
+
+    elements_read = fread(buffer, sizeof(u64), MOVIEHASH_BUFFER_SIZE, file);
+    assert(elements_read == MOVIEHASH_BUFFER_SIZE);
+
+    for (i64 i = 0; i < MOVIEHASH_BUFFER_SIZE; i++)
+        hash += buffer[i];
+
+    fseek_success = fseek(file, -KILOBYTES(64), SEEK_END);
+    assert(fseek_success == 0);
+
+    elements_read = fread(buffer, sizeof(u64), MOVIEHASH_BUFFER_SIZE, file);
+    assert(elements_read == MOVIEHASH_BUFFER_SIZE);
+
+    for (i64 i = 0; i < MOVIEHASH_BUFFER_SIZE; i++)
+        hash += buffer[i];
+
+    string_t hash_str = arena_sprintf(arena, "%016llx", hash);
+
+    hash_result_t result = {0};
+    result.success = true;
+    result.as.hash = hash_str;
+
+#undef MOVIEHASH_BUFFER_SIZE
+
+    return result;
 }
 
 /****************** api_request ******************
@@ -427,8 +577,26 @@ BOOL CALLBACK set_font(HWND window, LPARAM font)
     return TRUE;
 }
 
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_line, int show_code)
+int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line_ascii, int show_code)
 {
+    int argc;
+    LPWSTR command_line = GetCommandLineW();
+    wchar_t ** argv = CommandLineToArgvW(command_line, &argc);
+
+    // TODO support for starting without any filenames?
+    // TODO support for multiple files at once?
+    if (argc != 2)
+    {
+        assert(argc >= 1);
+        // TODO message box instead
+        dbg_print("ERROR: expected single argument, got %d.\n", argc);
+
+        dbg_wprint(L"Usage: %s <file path>\n", argv[0]);
+        ExitProcess(1);
+    }
+
+    wchar_t * media_filename = argv[1];
+
     WNDCLASS main_wc =
     {
         .style = CS_HREDRAW | CS_VREDRAW,
@@ -641,15 +809,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
         arena_t scratch = arena_alloc(MEGABYTES(8));
 
         string_t option = language_options[i];
-        assert(option.size >= 0 && option.size <= INT_MAX);
-        int option_size = (int) option.size;
+        wchar_t * option_wstr = string_to_unicode(&scratch, option);
 
-        int chars_required = MultiByteToWideChar(CP_UTF8, 0, option.ptr, option_size, NULL, 0);
-        wchar_t * buffer = arena_push_array(&scratch, wchar_t, chars_required);
-        int chars_written = MultiByteToWideChar(CP_UTF8, 0, option.ptr, option_size, buffer, chars_required);
-        assert(chars_written == chars_required);
-
-        SendMessage(win_controls.combo_sub_lang, CB_ADDSTRING, 0, (LPARAM) buffer);
+        SendMessage(win_controls.combo_sub_lang, CB_ADDSTRING, 0, (LPARAM) option_wstr);
 
         arena_free(&scratch);
     }
@@ -658,15 +820,24 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR command_l
     assert(selected_index < num_language_options);
     SendMessage(win_controls.combo_sub_lang, CB_SETCURSEL, selected_index, (LPARAM) 0);
 
+
+    arena_t arena = arena_alloc(MEGABYTES(4));
+    hash_result_t hash_result = hash_get(&arena, media_filename);
+    if (hash_result.success)
+    {
+        dbg_print("hash: %.*s\n", string_varg(hash_result.as.hash));
+    }
+    else
+    {
+        // wchar_t * error_wstr = string_to_unicode(&arena, hash_result.as.error);
+        // dbg_wprint(L"%s\n", error_wstr);
+        dbg_print_utf8("%.*s\n", string_varg(hash_result.as.error));
+    }
+
+
     // TODO handle button presses
 
     HINTERNET internet_handle = api_get_handle();
-
-    // DEBUG
-    dbg_print("EN_SETFOCUS: %d\n", EN_SETFOCUS);
-    dbg_print("EN_KILLFOCUS: %d\n", EN_KILLFOCUS);
-    dbg_print("EN_CHANGE: %d\n", EN_CHANGE);
-    dbg_print("EN_UPDATE: %d\n", EN_UPDATE);
 
     // DEBUG
     {

@@ -37,7 +37,8 @@ typedef double      f64;
 #define COMMON_TEMP_BUF_LEN     KILOBYTES(4)
 
 
-char * get_temp_buffer();
+void * get_temp_buffer(void);
+void * get_temp_buffer_alt(void);
 
 #define dbg_print(format, ...)                                                          \
     do {                                                                                \
@@ -45,6 +46,21 @@ char * get_temp_buffer();
         OutputDebugStringA(get_temp_buffer());                                          \
     } while (0);
 
+#define dbg_print_utf8(format, ...)                                                                                             \
+    do {                                                                                                                        \
+        stbsp_snprintf(get_temp_buffer(), COMMON_TEMP_BUF_LEN, format, __VA_ARGS__);                                            \
+        int chars_written = MultiByteToWideChar(CP_UTF8, 0, get_temp_buffer(), -1, get_temp_buffer_alt(), COMMON_TEMP_BUF_LEN); \
+        assert(chars_written != 0);                                                                                             \
+        OutputDebugStringW(get_temp_buffer_alt());                                                                              \
+    } while (0);
+
+#define dbg_wprint(format, ...)                                                         \
+    do {                                                                                \
+        wchar_t * str_buf = (wchar_t *) get_temp_buffer();                              \
+        size_t str_buf_len = COMMON_TEMP_BUF_LEN / sizeof(wchar_t);                     \
+        _snwprintf(str_buf, str_buf_len, format, __VA_ARGS__);                          \
+        OutputDebugStringW(str_buf);                                                    \
+    } while (0);
 
 
 typedef struct string_t string_t;
@@ -55,6 +71,7 @@ struct string_t
 };
 
 #define string_lit(x) (string_t) { .ptr = (char *) (x), .size = sizeof(x) - 1 }
+#define string_varg(s)  (int)(s).size, (s).ptr
 
 
 typedef struct arena_t arena_t;
@@ -74,11 +91,18 @@ void * arena_push(arena_t * arena, u64 amount);
 
 #ifdef JDP_COMMON_IMPLEMENTATION
 
-char * get_temp_buffer()
+void * get_temp_buffer()
 {
     static char buffer[COMMON_TEMP_BUF_LEN];
 
-    return buffer;
+    return (void *) buffer;
+}
+
+void * get_temp_buffer_alt()
+{
+    static char buffer[COMMON_TEMP_BUF_LEN];
+
+    return (void *) buffer;
 }
 
 
